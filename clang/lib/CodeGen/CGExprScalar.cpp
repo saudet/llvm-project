@@ -1917,6 +1917,14 @@ bool CodeGenFunction::ShouldNullCheckClassCastValue(const CastExpr *CE) {
   return true;
 }
 
+static bool isExtVectorBool(QualType Ty) {
+  const auto *ClangVecTy = Ty->getAs<VectorType>();
+  if (!ClangVecTy)
+    return false;
+
+  return ClangVecTy->isExtVectorBoolean();
+}
+
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
@@ -1958,7 +1966,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_BlockPointerToObjCPointerCast:
   case CK_AnyPointerToBlockPointerCast:
   case CK_BitCast: {
-    Value *Src = Visit(const_cast<Expr*>(E));
+    Value *Src = Visit(const_cast<Expr *>(E));
     llvm::Type *SrcTy = Src->getType();
     llvm::Type *DstTy = ConvertType(DestTy);
     if (SrcTy->isPtrOrPtrVectorTy() && DstTy->isPtrOrPtrVectorTy() &&
@@ -2031,7 +2039,31 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       return EmitLoadOfLValue(DestLV, CE->getExprLoc());
     }
 
-    return Builder.CreateBitCast(Src, DstTy);
+    // SExt/Trunc ext_vector_type boolean vectors to fit the expected type
+    auto *VecSrcTy = dyn_cast<llvm::VectorType>(Src->getType());
+    auto *VecDstTy = dyn_cast<llvm::VectorType>(DstTy);
+    bool VectorElementCast =
+        VecSrcTy && VecDstTy &&
+        (VecSrcTy->getElementCount() == VecDstTy->getElementCount());
+
+    if (isExtVectorBool(E->getType())) {
+      // When casting with the same element count extend this to the native
+      // result size Otw, signextend to 'i8' as an intermediary
+      unsigned DstElemBits =
+          VectorElementCast ? DstTy->getScalarSizeInBits() : 8;
+
+      auto *PlainIntTy = llvm::VectorType::get(Builder.getIntNTy(DstElemBits),
+                                               VecSrcTy->getElementCount());
+      Src = Builder.CreateSExt(Src, PlainIntTy);
+    }
+    Src = Builder.CreateBitCast(Src, DstTy);
+    if (isExtVectorBool(DestTy)) {
+      auto *PlainIntTy =
+          llvm::VectorType::get(Builder.getIntNTy(SrcTy->getScalarSizeInBits()),
+                                VecSrcTy->getElementCount());
+      Src = Builder.CreateTrunc(Src, PlainIntTy);
+    }
+    return Src;
   }
   case CK_AddressSpaceConversion: {
     Expr::EvalResult Result;
@@ -4584,6 +4616,11 @@ Value *ScalarExprEmitter::VisitAsTypeExpr(AsTypeExpr *E) {
       isa<llvm::VectorType>(DstTy)
           ? cast<llvm::FixedVectorType>(DstTy)->getNumElements()
           : 0;
+
+  // Use bit vector expansion for generic boolean vectors
+  if (isExtVectorBool(E->getType())) {
+    return CGF.emitBoolVecConversion(Src, NumElementsDst, "astype");
+  }
 
   // Going from vec3 to non-vec3 is a special case and requires a shuffle
   // vector to get a vec4, then a bitcast if the target type is different.

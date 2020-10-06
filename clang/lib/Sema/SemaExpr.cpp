@@ -7200,11 +7200,13 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
   llvm_unreachable("Unhandled scalar cast");
 }
 
-static bool breakDownVectorType(QualType type, uint64_t &len,
-                                QualType &eltType) {
+static bool breakDownVectorType(QualType type, uint64_t &len, QualType &eltType,
+                                bool &IsBitVector) {
   // Vectors are simple.
+  IsBitVector = false;
   if (const VectorType *vecType = type->getAs<VectorType>()) {
     len = vecType->getNumElements();
+    IsBitVector = vecType->isExtVectorBoolean();
     eltType = vecType->getElementType();
     assert(eltType->isScalarType());
     return true;
@@ -7239,14 +7241,21 @@ bool Sema::areLaxCompatibleVectorTypes(QualType srcTy, QualType destTy) {
 
   uint64_t srcLen, destLen;
   QualType srcEltTy, destEltTy;
-  if (!breakDownVectorType(srcTy, srcLen, srcEltTy)) return false;
-  if (!breakDownVectorType(destTy, destLen, destEltTy)) return false;
+  bool srcBoolVector, destBoolVector;
+  if (!breakDownVectorType(srcTy, srcLen, srcEltTy, srcBoolVector))
+    return false;
+  if (!breakDownVectorType(destTy, destLen, destEltTy, destBoolVector))
+    return false;
+
+  bool HasBitVectors = true; // Context.getTargetInfo().hasDenseBoolVectors();
 
   // ASTContext::getTypeSize will return the size rounded up to a
   // power of 2, so instead of using that, we need to use the raw
   // element size multiplied by the element count.
-  uint64_t srcEltSize = Context.getTypeSize(srcEltTy);
-  uint64_t destEltSize = Context.getTypeSize(destEltTy);
+  uint64_t srcEltSize =
+      (HasBitVectors & srcBoolVector) ? 1 : Context.getTypeSize(srcEltTy);
+  uint64_t destEltSize =
+      (HasBitVectors & destBoolVector) ? 1 : Context.getTypeSize(destEltTy);
 
   return (srcLen * srcEltSize == destLen * destEltSize);
 }
@@ -8016,10 +8025,14 @@ OpenCLCheckVectorConditional(Sema &S, ExprResult &Cond,
   // result as specified in OpenCL v1.1 s6.3.i.
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
+    bool IsBoolVecLang =
+        !S.getLangOpts().OpenCL && !S.getLangOpts().OpenCLCPlusPlus;
     QualType VecResTy = S.CheckVectorOperands(LHS, RHS, QuestionLoc,
-                                              /*isCompAssign*/false,
-                                              /*AllowBothBool*/true,
-                                              /*AllowBoolConversions*/false);
+                                              /*isCompAssign*/ false,
+                                              /*AllowBothBool*/ true,
+                                              /*AllowBoolConversions*/ false,
+                                              /*AllowBooleanOperation*/ IsBoolVecLang,
+                                              /*ReportInvalid*/ true);
     if (VecResTy.isNull()) return QualType();
     // The result type must match the condition type as specified in
     // OpenCL v1.1 s6.11.6.
@@ -8083,9 +8096,11 @@ QualType Sema::CheckConditionalOperands(ExprResult &Cond, ExprResult &LHS,
   // Now check the two expressions.
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType())
-    return CheckVectorOperands(LHS, RHS, QuestionLoc, /*isCompAssign*/false,
-                               /*AllowBothBool*/true,
-                               /*AllowBoolConversions*/false);
+    return CheckVectorOperands(LHS, RHS, QuestionLoc, /*isCompAssign*/ false,
+                               /*AllowBothBool*/ true,
+                               /*AllowBoolConversions*/ false,
+                               /*AllowBooleanOperation*/ false,
+                               /*ReportInvalid*/ true);
 
   QualType ResTy =
       UsualArithmeticConversions(LHS, RHS, QuestionLoc, ACK_Conditional);
@@ -9784,10 +9799,17 @@ static bool tryGCCVectorConvertAndSplat(Sema &S, ExprResult *Scalar,
   return false;
 }
 
+static bool IsScalarOrVectorBool(QualType Ty) {
+  return Ty->isBooleanType() ||
+         (Ty->isVectorType() && Ty->getAs<VectorType>()->isExtVectorBoolean());
+}
+
 QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
                                    SourceLocation Loc, bool IsCompAssign,
                                    bool AllowBothBool,
-                                   bool AllowBoolConversions) {
+                                   bool AllowBoolConversions,
+                                   bool AllowBoolOperation,
+                                   bool ReportInvalid) {
   if (!IsCompAssign) {
     LHS = DefaultFunctionArrayLvalueConversion(LHS.get());
     if (LHS.isInvalid())
@@ -9808,14 +9830,19 @@ QualType Sema::CheckVectorOperands(ExprResult &LHS, ExprResult &RHS,
 
   if ((LHSVecType && LHSVecType->getElementType()->isBFloat16Type()) ||
       (RHSVecType && RHSVecType->getElementType()->isBFloat16Type()))
-    return InvalidOperands(Loc, LHS, RHS);
+    return ReportInvalid ? InvalidOperands(Loc, LHS, RHS) : QualType();
 
   // AltiVec-style "vector bool op vector bool" combinations are allowed
   // for some operators but not others.
   if (!AllowBothBool &&
       LHSVecType && LHSVecType->getVectorKind() == VectorType::AltiVecBool &&
       RHSVecType && RHSVecType->getVectorKind() == VectorType::AltiVecBool)
-    return InvalidOperands(Loc, LHS, RHS);
+    return ReportInvalid ? InvalidOperands(Loc, LHS, RHS) : QualType();
+
+  // This operation may not be performed on boolean vectors.
+  if (!AllowBoolOperation && IsScalarOrVectorBool(LHSType) &&
+      IsScalarOrVectorBool(RHSType))
+    return ReportInvalid ? InvalidOperands(Loc, LHS, RHS) : QualType();
 
   // If the vector types are identical, return.
   if (Context.hasSameType(LHSType, RHSType))
@@ -10080,8 +10107,10 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType())
     return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign,
-                               /*AllowBothBool*/getLangOpts().AltiVec,
-                               /*AllowBoolConversions*/false);
+                               /*AllowBothBool*/ getLangOpts().AltiVec,
+                               /*AllowBoolConversions*/ false,
+                               /*AllowBooleanOperation*/ false,
+                               /*ReportInvalid*/ true);
   if (!IsDiv && (LHS.get()->getType()->isConstantMatrixType() ||
                  RHS.get()->getType()->isConstantMatrixType()))
     return CheckMatrixMultiplyOperands(LHS, RHS, Loc, IsCompAssign);
@@ -10110,8 +10139,10 @@ QualType Sema::CheckRemainderOperands(
     if (LHS.get()->getType()->hasIntegerRepresentation() &&
         RHS.get()->getType()->hasIntegerRepresentation())
       return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign,
-                                 /*AllowBothBool*/getLangOpts().AltiVec,
-                                 /*AllowBoolConversions*/false);
+                                 /*AllowBothBool*/ getLangOpts().AltiVec,
+                                 /*AllowBoolConversions*/ false,
+                                 /*AllowBooleanOperation*/ false,
+                                 /*ReportInvalid*/ true);
     return InvalidOperands(Loc, LHS, RHS);
   }
 
@@ -10396,10 +10427,12 @@ QualType Sema::CheckAdditionOperands(ExprResult &LHS, ExprResult &RHS,
 
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
-    QualType compType = CheckVectorOperands(
-        LHS, RHS, Loc, CompLHSTy,
-        /*AllowBothBool*/getLangOpts().AltiVec,
-        /*AllowBoolConversions*/getLangOpts().ZVector);
+    QualType compType =
+        CheckVectorOperands(LHS, RHS, Loc, CompLHSTy,
+                            /*AllowBothBool*/ getLangOpts().AltiVec,
+                            /*AllowBoolConversions*/ getLangOpts().ZVector,
+                            /*AllowBooleanOperation*/ false,
+                            /*ReportInvalid*/ true);
     if (CompLHSTy) *CompLHSTy = compType;
     return compType;
   }
@@ -10496,10 +10529,12 @@ QualType Sema::CheckSubtractionOperands(ExprResult &LHS, ExprResult &RHS,
 
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
-    QualType compType = CheckVectorOperands(
-        LHS, RHS, Loc, CompLHSTy,
-        /*AllowBothBool*/getLangOpts().AltiVec,
-        /*AllowBoolConversions*/getLangOpts().ZVector);
+    QualType compType =
+        CheckVectorOperands(LHS, RHS, Loc, CompLHSTy,
+                            /*AllowBothBool*/ getLangOpts().AltiVec,
+                            /*AllowBoolConversions*/ getLangOpts().ZVector,
+                            /*AllowBooleanOperation*/ false,
+                            /*ReportInvalid*/ true);
     if (CompLHSTy) *CompLHSTy = compType;
     return compType;
   }
@@ -10736,6 +10771,15 @@ static QualType checkVectorShift(Sema &S, ExprResult &LHS, ExprResult &RHS,
   QualType RHSType = RHS.get()->getType();
   const VectorType *RHSVecTy = RHSType->getAs<VectorType>();
   QualType RHSEleType = RHSVecTy ? RHSVecTy->getElementType() : RHSType;
+
+  // Do not allow shifts for boolean vectors.
+  if ((LHSVecTy && LHSVecTy->isExtVectorBoolean()) ||
+      (RHSVecTy && RHSVecTy->isExtVectorBoolean())) {
+    S.Diag(Loc, diag::err_typecheck_invalid_operands)
+        << LHS.get()->getType() << RHS.get()->getType()
+        << LHS.get()->getSourceRange();
+    return QualType();
+  }
 
   // The operands need to be integers.
   if (!LHSEleType->isIntegerType()) {
@@ -11924,7 +11968,9 @@ QualType Sema::GetSignedVectorType(QualType V) {
     return Context.getExtVectorType(Context.LongLongTy, VTy->getNumElements());
   }
 
-  if (TypeSize == Context.getTypeSize(Context.LongLongTy))
+  if (VTy->isExtVectorBoolean())
+    return Context.getExtVectorType(Context.BoolTy, VTy->getNumElements());
+  else if (TypeSize == Context.getTypeSize(Context.LongLongTy))
     return Context.getVectorType(Context.LongLongTy, VTy->getNumElements(),
                                  VectorType::GenericVector);
   else if (TypeSize == Context.getTypeSize(Context.LongTy))
@@ -11956,9 +12002,12 @@ QualType Sema::CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
 
   // Check to make sure we're operating on vectors of the same type and width,
   // Allowing one side to be a scalar of element type.
-  QualType vType = CheckVectorOperands(LHS, RHS, Loc, /*isCompAssign*/false,
-                              /*AllowBothBool*/true,
-                              /*AllowBoolConversions*/getLangOpts().ZVector);
+  QualType vType =
+      CheckVectorOperands(LHS, RHS, Loc, /*isCompAssign*/ false,
+                          /*AllowBothBool*/ true,
+                          /*AllowBoolConversions*/ getLangOpts().ZVector,
+                          /*AllowBooleanOperation*/ true,
+                          /*ReportInvalid*/ true);
   if (vType.isNull())
     return vType;
 
@@ -12105,8 +12154,10 @@ QualType Sema::CheckVectorLogicalOperands(ExprResult &LHS, ExprResult &RHS,
   // Ensure that either both operands are of the same vector type, or
   // one operand is of a vector type and the other is of its element type.
   QualType vType = CheckVectorOperands(LHS, RHS, Loc, false,
-                                       /*AllowBothBool*/true,
-                                       /*AllowBoolConversions*/false);
+                                       /*AllowBothBool*/ true,
+                                       /*AllowBoolConversions*/ false,
+                                       /*AllowBooleanOperation*/ false,
+                                       /*ReportInvalid*/ false);
   if (vType.isNull())
     return InvalidOperands(Loc, LHS, RHS);
   if (getLangOpts().OpenCL && getLangOpts().OpenCLVersion < 120 &&
@@ -12199,6 +12250,20 @@ QualType Sema::CheckMatrixMultiplyOperands(ExprResult &LHS, ExprResult &RHS,
   return CheckMatrixElementwiseOperands(LHS, RHS, Loc, IsCompAssign);
 }
 
+static bool isLegalBoolVectorBinaryOp(BinaryOperatorKind Opc) {
+  switch (Opc) {
+  default:
+    return false;
+  case BO_And:
+  case BO_AndAssign:
+  case BO_Or:
+  case BO_OrAssign:
+  case BO_Xor:
+  case BO_XorAssign:
+    return true;
+  }
+}
+
 inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
                                            SourceLocation Loc,
                                            BinaryOperatorKind Opc) {
@@ -12207,13 +12272,17 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
   bool IsCompAssign =
       Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign;
 
+  bool LegalBoolVecOperator = isLegalBoolVectorBinaryOp(Opc);
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() &&
         RHS.get()->getType()->hasIntegerRepresentation())
       return CheckVectorOperands(LHS, RHS, Loc, IsCompAssign,
-                        /*AllowBothBool*/true,
-                        /*AllowBoolConversions*/getLangOpts().ZVector);
+                                 /*AllowBothBool*/ true,
+                                 /*AllowBoolConversions*/ getLangOpts().ZVector,
+                                 /*AllowBooleanOperation*/ LegalBoolVecOperator,
+                                 /*ReportInvalid*/ true);
     return InvalidOperands(Loc, LHS, RHS);
   }
 

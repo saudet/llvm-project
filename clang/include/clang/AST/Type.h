@@ -3256,6 +3256,10 @@ public:
     return VectorKind(VectorTypeBits.VecKind);
   }
 
+  bool isExtVectorBoolean() const {
+    return (getTypeClass() == ExtVector) && getElementType()->isBooleanType();
+  }
+
   void Profile(llvm::FoldingSetNodeID &ID) {
     Profile(ID, getElementType(), getNumElements(),
             getTypeClass(), getVectorKind());
