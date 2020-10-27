@@ -788,7 +788,7 @@ let cx = 0, cx2 = 1 in {
   defm VADDUW : RVm<"vaddu.w", 0xc8, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVADDUUP : RVm<"pvaddu.up", 0xc8, V64, I64, VM>;
+defm PVADDUUP : RVm<"pvaddu.up", 0xc8, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVADDU : RVm<"pvaddu", 0xc8, V64, I64, VM512>;
 def : MnemonicAlias<"vaddu.w", "pvaddu.lo">;
@@ -802,7 +802,7 @@ let cx = 0, cx2 = 1 in {
   defm VADDSWZX : RVm<"vadds.w.zx", 0xca, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVADDSUP : RVm<"pvadds.up", 0xca, V64, I64, VM>;
+defm PVADDSUP : RVm<"pvadds.up", 0xca, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVADDS : RVm<"pvadds", 0xca, V64, I64, VM512>;
 def : MnemonicAlias<"pvadds.lo.sx", "vadds.w.sx">;
@@ -822,7 +822,7 @@ let cx = 0, cx2 = 1 in {
   defm VSUBUW : RVm<"vsubu.w", 0xd8, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVSUBUUP : RVm<"pvsubu.up", 0xd8, V64, I64, VM>;
+defm PVSUBUUP : RVm<"pvsubu.up", 0xd8, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVSUBU : RVm<"pvsubu", 0xd8, V64, I64, VM512>;
 def : MnemonicAlias<"vsubu.w", "pvsubu.lo">;
@@ -836,7 +836,7 @@ let cx = 0, cx2 = 1 in {
   defm VSUBSWZX : RVm<"vsubs.w.zx", 0xda, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVSUBSUP : RVm<"pvsubs.up", 0xda, V64, I64, VM>;
+defm PVSUBSUP : RVm<"pvsubs.up", 0xda, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVSUBS : RVm<"pvsubs", 0xda, V64, I64, VM512>;
 def : MnemonicAlias<"pvsubs.lo.sx", "vsubs.w.sx">;
@@ -891,7 +891,7 @@ let cx = 0, cx2 = 1 in {
   defm VCMPUW : RVm<"vcmpu.w", 0xb9, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVCMPUUP : RVm<"pvcmpu.up", 0xb9, V64, I64, VM>;
+defm PVCMPUUP : RVm<"pvcmpu.up", 0xb9, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVCMPU : RVm<"pvcmpu", 0xb9, V64, I64, VM512>;
 def : MnemonicAlias<"vcmpu.w", "pvcmpu.lo">;
@@ -905,7 +905,7 @@ let cx = 0, cx2 = 1 in {
   defm VCMPSWZX : RVm<"vcmps.w.zx", 0xfa, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVCMPSUP : RVm<"pvcmps.up", 0xfa, V64, I64, VM>;
+defm PVCMPSUP : RVm<"pvcmps.up", 0xfa, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVCMPS : RVm<"pvcmps", 0xfa, V64, I64, VM512>;
 def : MnemonicAlias<"pvcmps.lo.sx", "vcmps.w.sx">;
@@ -925,7 +925,7 @@ let cx = 0, cx2 = 1 in {
   defm VMAXSWZX : RVm<"vmaxs.w.zx", 0x8a, V64, I32, VM>;
 }
 let cx = 1, cx2 = 0 in
-defm PVMAXSUP : RVm<"pvmaxs.up", 0x8a, V64, I64, VM>;
+defm PVMAXSUP : RVm<"pvmaxs.up", 0x8a, V64, F32, VM>;
 let cx = 1, cx2 = 1 in
 defm PVMAXS : RVm<"pvmaxs", 0x8a, V64, I64, VM512>;
 let cs2 = 1 in {
@@ -1072,7 +1072,7 @@ defm VSFA : RVSAm<"vsfa", 0xd7, V64, VM>;
 let cx = 0, cx2 = 0 in
 defm VFADDD : RVm<"vfadd.d", 0xcc, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFADDLO : RVm<"pvfadd.lo", 0xcc, V64, I64, VM, simm7fp>;
+defm PVFADDLO : RVm<"pvfadd.lo", 0xcc, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFADDUP : RVm<"pvfadd.up", 0xcc, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1086,7 +1086,7 @@ def : MnemonicAlias<"vfadd.s", "pvfadd.up">;
 let cx = 0, cx2 = 0 in
 defm VFSUBD : RVm<"vfsub.d", 0xdc, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFSUBLO : RVm<"pvfsub.lo", 0xdc, V64, I64, VM, simm7fp>;
+defm PVFSUBLO : RVm<"pvfsub.lo", 0xdc, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFSUBUP : RVm<"pvfsub.up", 0xdc, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1100,7 +1100,7 @@ def : MnemonicAlias<"vfsub.s", "pvfsub.up">;
 let cx = 0, cx2 = 0 in
 defm VFMULD : RVm<"vfmul.d", 0xcd, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFMULLO : RVm<"pvfmul.lo", 0xcd, V64, I64, VM, simm7fp>;
+defm PVFMULLO : RVm<"pvfmul.lo", 0xcd, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFMULUP : RVm<"pvfmul.up", 0xcd, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1124,7 +1124,7 @@ defm VFSQRTS : RVF1m<"vfsqrt.s", 0xed, V64, VM>;
 let cx = 0, cx2 = 0 in
 defm VFCMPD : RVm<"vfcmp.d", 0xfc, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFCMPLO : RVm<"pvfcmp.lo", 0xfc, V64, I64, VM, simm7fp>;
+defm PVFCMPLO : RVm<"pvfcmp.lo", 0xfc, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFCMPUP : RVm<"pvfcmp.up", 0xfc, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1138,7 +1138,7 @@ def : MnemonicAlias<"vfcmp.s", "pvfcmp.up">;
 let cx = 0, cx2 = 0 in
 defm VFMAXD : RVm<"vfmax.d", 0xbd, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFMAXLO : RVm<"pvfmax.lo", 0xbd, V64, I64, VM, simm7fp>;
+defm PVFMAXLO : RVm<"pvfmax.lo", 0xbd, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFMAXUP : RVm<"pvfmax.up", 0xbd, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1150,7 +1150,7 @@ let cs2 = 1 in {
   let cx = 0, cx2 = 0 in
   defm VFMIND : RVm<"vfmin.d", 0xbd, V64, I64, VM, simm7fp>;
   let cx = 0, cx2 = 1 in
-  defm PVFMINLO : RVm<"pvfmin.lo", 0xbd, V64, I64, VM, simm7fp>;
+  defm PVFMINLO : RVm<"pvfmin.lo", 0xbd, V64, I32, VM, simm7fp>;
   let cx = 1, cx2 = 0 in {
     defm PVFMINUP : RVm<"pvfmin.up", 0xbd, V64, F32, VM, simm7fp>;
     let isCodeGenOnly = 1 in
@@ -1166,7 +1166,7 @@ def : MnemonicAlias<"vfmin.s", "pvfmin.up">;
 let cx = 0, cx2 = 0 in
 defm VFMADD : RVMm<"vfmad.d", 0xe2, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFMADLO : RVMm<"pvfmad.lo", 0xe2, V64, I64, VM, simm7fp>;
+defm PVFMADLO : RVMm<"pvfmad.lo", 0xe2, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFMADUP : RVMm<"pvfmad.up", 0xe2, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1180,7 +1180,7 @@ def : MnemonicAlias<"vfmad.s", "pvfmad.up">;
 let cx = 0, cx2 = 0 in
 defm VFMSBD : RVMm<"vfmsb.d", 0xf2, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFMSBLO : RVMm<"pvfmsb.lo", 0xf2, V64, I64, VM, simm7fp>;
+defm PVFMSBLO : RVMm<"pvfmsb.lo", 0xf2, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFMSBUP : RVMm<"pvfmsb.up", 0xf2, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1194,7 +1194,7 @@ def : MnemonicAlias<"vfmsb.s", "pvfmsb.up">;
 let cx = 0, cx2 = 0 in
 defm VFNMADD : RVMm<"vfnmad.d", 0xe3, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFNMADLO : RVMm<"pvfnmad.lo", 0xe3, V64, I64, VM, simm7fp>;
+defm PVFNMADLO : RVMm<"pvfnmad.lo", 0xe3, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFNMADUP : RVMm<"pvfnmad.up", 0xe3, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
@@ -1208,7 +1208,7 @@ def : MnemonicAlias<"vfnmad.s", "pvfnmad.up">;
 let cx = 0, cx2 = 0 in
 defm VFNMSBD : RVMm<"vfnmsb.d", 0xf3, V64, I64, VM, simm7fp>;
 let cx = 0, cx2 = 1 in
-defm PVFNMSBLO : RVMm<"pvfnmsb.lo", 0xf3, V64, I64, VM, simm7fp>;
+defm PVFNMSBLO : RVMm<"pvfnmsb.lo", 0xf3, V64, I32, VM, simm7fp>;
 let cx = 1, cx2 = 0 in {
   defm PVFNMSBUP : RVMm<"pvfnmsb.up", 0xf3, V64, F32, VM, simm7fp>;
   let isCodeGenOnly = 1 in
