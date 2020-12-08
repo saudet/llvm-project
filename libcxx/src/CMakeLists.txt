@@ -207,6 +207,11 @@ if (LIBCXX_ENABLE_SHARED)
       target_link_libraries(cxx_shared PRIVATE "-Wl,-force_load" "${LIBCXX_CXX_STATIC_ABI_LIBRARY}")
     else()
       target_link_libraries(cxx_shared PRIVATE "-Wl,--whole-archive,-Bstatic" "${LIBCXX_CXX_STATIC_ABI_LIBRARY}" "-Wl,-Bdynamic,--no-whole-archive")
+      if (LIBCXXABI_ENABLE_STATIC_UNWINDER)
+	# Link against the compiler-rt builtins if it did not happen along the
+	# way from libunwind -> libcxxabi -> libcxx.
+        target_link_libraries(cxx_shared PRIVATE "${LIBCXX_BUILTINS_LIBRARY}" "-ldl")
+      endif()
     endif()
   else()
     target_link_libraries(cxx_shared PUBLIC "${LIBCXX_CXX_SHARED_ABI_LIBRARY}")
