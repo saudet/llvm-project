@@ -269,7 +269,7 @@ inline static VECC::CondCode VEValToCondCode(unsigned Val, bool IsInteger) {
       return VECC::CC_AT;
     }
   }
-  llvm_unreachable("Invalid cond code");
+  // Invalid condition may come through disassembler from corrupted input.
   return VECC::CC_AF;
 }
 
