@@ -892,6 +892,7 @@ static void addTpOffsetGotEntry(Symbol &sym) {
     in.got->relocations.push_back({R_TPREL, target->symbolicRel, off, 0, &sym});
     return;
   }
+  dbgs() << "bad0\n";
   mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
       target->tlsGotRel, in.got, off, sym, target->symbolicRel);
 }
@@ -1176,6 +1177,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
   bool toExecRelax = !config->shared && config->emachine != EM_ARM &&
                      config->emachine != EM_HEXAGON &&
                      config->emachine != EM_RISCV &&
+                     config->emachine != EM_VE &&
                      !c.file->ppc64DisableTLSRelax;
 
   // If we are producing an executable and the symbol is non-preemptable, it
@@ -1226,6 +1228,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
   // thread pointer is stored in the got. This cannot be relaxed to Local-Exec.
   if (expr == R_TLSLD_GOT_OFF) {
     if (!sym.isInGot()) {
+      dbgs() << "checking bad...\n";
       in.got->addEntry(sym);
       uint64_t off = sym.getGotOffset();
       in.got->relocations.push_back(
@@ -1241,6 +1244,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
       if (in.got->addDynTlsEntry(sym)) {
         uint64_t off = in.got->getGlobalDynOffset(sym);
 
+        dbgs() << "checking bad...\n";
         if (isLocalInExecutable)
           // Write one to the GOT slot.
           in.got->relocations.push_back(
@@ -1271,6 +1275,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
            addend, &sym});
       if (!sym.isInGot()) {
         in.got->addEntry(sym);
+        dbgs() << "bad1\n";
         mainPart->relaDyn->addSymbolReloc(target->tlsGotRel, in.got,
                                           sym.getGotOffset(), sym);
       }

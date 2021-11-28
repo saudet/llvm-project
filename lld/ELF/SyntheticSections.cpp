@@ -989,9 +989,12 @@ void MipsGotSection::build() {
       // for the TP-relative offset as we don't know how much other data will
       // be allocated before us in the static TLS block.
       if (s->isPreemptible || config->shared)
+        {
+        dbgs() << "bad3\n";
         mainPart->relaDyn->addReloc({target->tlsGotRel, this, offset,
                                      DynamicReloc::AgainstSymbolWithTargetVA,
                                      *s, 0, R_ABS});
+        }
     }
     for (std::pair<Symbol *, size_t> &p : got.dynTlsSymbols) {
       Symbol *s = p.first;
@@ -1014,6 +1017,7 @@ void MipsGotSection::build() {
         if (!s->isPreemptible)
           continue;
         offset += config->wordsize;
+        dbgs() << "not good...\n";
         mainPart->relaDyn->addSymbolReloc(target->tlsOffsetRel, this, offset,
                                           *s);
       }
