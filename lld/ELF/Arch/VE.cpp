@@ -28,6 +28,7 @@ public:
                      const uint8_t *loc) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotPltHeader(uint8_t *buf) const override;
+  void writeGotHeader(uint8_t *buf) const override;
   void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(uint8_t *buf) const override;
   void writePlt(uint8_t *buf, const Symbol &sym,
@@ -55,7 +56,7 @@ VE::VE() {
   pltHeaderSize = 64;
 
   // The .got has no preserved entries.
-  gotHeaderEntriesNum = 0;
+  // gotHeaderEntriesNum = 0;
 
   // _GLOBAL_OFFSET_TABLE_ == .got.plt.
   gotBaseSymInGotPlt = true;
@@ -63,7 +64,11 @@ VE::VE() {
   // _GLOBAL_OFFSET_TABLE_ has two preserved entries.
   //   _GLOBAL_OFFSET_TABLE_[0] = _DYNAMIC.
   //   _GLOBAL_OFFSET_TABLE_[1] = reserved by glibc.
-  gotPltHeaderEntriesNum = 2;
+  // or
+  // _GLOBAL_OFFSET_TABLE_[0] = _DYNAMIC
+  // glibc stores _dl_runtime_resolve in _GLOBAL_OFFSET_TABLE_[1],
+  // link_map in _GLOBAL_OFFSET_TABLE_[2].
+  gotPltHeaderEntriesNum = 3;
 
   defaultCommonPageSize = 8192;
   defaultMaxPageSize = 0x100000;
@@ -246,7 +251,14 @@ RelExpr VE::adjustTlsExpr(RelType type, RelExpr expr) const {
 void VE::writeGotPltHeader(uint8_t *buf) const {
   // _GLOBAL_OFFSET_TABLE_[0] = _DYNAMIC.
   // The glibc stores __dso_handle (reserved) in _GLOBAL_OFFSET_TABLE[1].
-  write64(buf, mainPart->dynamic->getVA());
+  write64le(buf, mainPart->dynamic->getVA());
+}
+
+void VE::writeGotHeader(uint8_t *buf) const {
+  // _GLOBAL_OFFSET_TABLE_[0] = _DYNAMIC
+  // glibc stores _dl_runtime_resolve in _GLOBAL_OFFSET_TABLE_[1],
+  // link_map in _GLOBAL_OFFSET_TABLE_[2].
+  write64le(buf, mainPart->dynamic->getVA());
 }
 
 void VE::writeGotPlt(uint8_t *buf, const Symbol &s) const {
