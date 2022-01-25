@@ -413,6 +413,7 @@ VETargetLowering::computeGatherScatterAddress(CustomDAG &CDAG, SDValue BasePtr,
   if (!Scale || isOneConstant(Scale)) {
     ScaledIndex = Index;
   } else {
+    Scale = CDAG.getConstant(cast<ConstantSDNode>(Scale)->getLimitedValue(), MVT::i64);
     SDValue ScaleBroadcast = CDAG.createBroadcast(IndexVT, Scale, AVL);
     ScaledIndex = CDAG.getNode(VEISD::VVP_MUL, IndexVT,
                                {Index, ScaleBroadcast, Mask, AVL});
